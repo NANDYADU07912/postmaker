@@ -124,39 +124,21 @@ async def get_chat_id_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Create a new chat selection session
     chat_selection_data[user_id] = ChatSelectionData()
-    selection_data = chat_selection_data[user_id]
     
-    # Get all chats where the user is a member
-    try:
-        # This will get all chats where the bot is added and user is likely a member
-        # Note: The bot can only get info about chats where it is a member
-        keyboard = []
-        
-        # Add current chat
-        current_chat = update.effective_chat
-        if current_chat.type != Chat.PRIVATE:
-            selection_data.chats.append(current_chat)
-            keyboard.append([InlineKeyboardButton(
-                f"💬 {current_chat.title if hasattr(current_chat, 'title') else 'Current Chat'} (ID: {current_chat.id})", 
-                callback_data=f"select_chat_{current_chat.id}"
-            )])
-        
-        # In a real implementation, you would fetch the user's chats from Telegram
-        # For now, we'll provide instructions
-        keyboard.append([InlineKeyboardButton("🔄 Refresh My Chats", callback_data="refresh_chats")])
-        keyboard.append([InlineKeyboardButton("❌ Cancel", callback_data="cancel_chat_selection")])
-        
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        message_text = "📋 Your Chats:\n\n"
-        message_text += "Note: The bot can only show chats where it is a member.\n"
-        message_text += "If you don't see your chat, make sure the bot is added as an admin."
-        
-        await update.message.reply_text(message_text, reply_markup=reply_markup)
-        
-    except Exception as e:
-        logger.error(f"Error getting chats: {e}")
-        await update.message.reply_text("❌ Error retrieving your chats. Please try again.")
+    keyboard = [
+        [InlineKeyboardButton("👥 My Groups", callback_data="list_groups")],
+        [InlineKeyboardButton("📢 My Channels", callback_data="list_channels")],
+        [InlineKeyboardButton("💬 Current Chat", callback_data="current_chat")],
+        [InlineKeyboardButton("❌ Cancel", callback_data="cancel_chat_selection")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    message_text = "🔍 Select where you want to get Chat ID from:\n\n"
+    message_text += "• 👥 My Groups - List all your groups\n"
+    message_text += "• 📢 My Channels - List all your channels\n"
+    message_text += "• 💬 Current Chat - Get ID of this chat"
+    
+    await update.message.reply_text(message_text, reply_markup=reply_markup)
 
 async def handle_chat_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -165,101 +147,91 @@ async def handle_chat_selection(update: Update, context: ContextTypes.DEFAULT_TY
     
     await query.answer()
     
-    if user_id not in chat_selection_data:
-        await query.edit_message_text("❌ Session expired. Please use the 'Get Chat ID' button again.")
+    if data == "current_chat":
+        chat = query.message.chat
+        chat_type = "Group" if chat.type in [Chat.GROUP, Chat.SUPERGROUP] else "Channel" if chat.type == Chat.CHANNEL else "Private Chat"
+        
+        message_text = f"💬 Current Chat Information:\n\n"
+        message_text += f"🆔 Chat ID: `{chat.id}`\n"
+        message_text += f"📋 Type: {chat_type}\n"
+        
+        if hasattr(chat, 'title') and chat.title:
+            message_text += f"📛 Title: {chat.title}\n"
+        
+        if hasattr(chat, 'username') and chat.username:
+            message_text += f"👤 Username: @{chat.username}\n"
+        
+        message_text += f"\n💡 Use this ID in your post targeting."
+        
+        await query.edit_message_text(message_text, parse_mode=ParseMode.MARKDOWN)
         return
     
-    selection_data = chat_selection_data[user_id]
+    elif data == "list_groups":
+        await query.edit_message_text("🔄 Fetching your groups...")
+        
+        # In a real implementation, you would fetch user's groups from Telegram
+        # This is a placeholder implementation
+        keyboard = [
+            [InlineKeyboardButton("➕ Add Bot to a Group", url="https://t.me/YourBotUsername?startgroup=true")],
+            [InlineKeyboardButton("🔄 Refresh", callback_data="list_groups")],
+            [InlineKeyboardButton("↩️ Back", callback_data="back_to_main")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        message_text = "👥 Your Groups:\n\n"
+        message_text += "To get a group's ID, make sure:\n"
+        message_text += "1. You are an admin in the group\n"
+        message_text += "2. The bot is added to the group\n"
+        message_text += "3. The bot has admin rights in the group\n\n"
+        message_text += "Then use /getchatid command in that group."
+        
+        await query.edit_message_text(message_text, reply_markup=reply_markup)
+        return
     
-    if data == "refresh_chats":
-        # Refresh the chat list
-        try:
-            # In a real implementation, you would fetch updated chats
-            await query.edit_message_text("🔄 Refreshing your chats...")
-            
-            # Simulate refresh delay
-            await asyncio.sleep(1)
-            
-            # Recreate the menu
-            keyboard = []
-            current_chat = query.message.chat
-            if current_chat.type != Chat.PRIVATE:
-                keyboard.append([InlineKeyboardButton(
-                    f"💬 {current_chat.title if hasattr(current_chat, 'title') else 'Current Chat'} (ID: {current_chat.id})", 
-                    callback_data=f"select_chat_{current_chat.id}"
-                )])
-            
-            keyboard.append([InlineKeyboardButton("🔄 Refresh My Chats", callback_data="refresh_chats")])
-            keyboard.append([InlineKeyboardButton("❌ Cancel", callback_data="cancel_chat_selection")])
-            
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            message_text = "📋 Your Chats (Refreshed):\n\n"
-            message_text += "Note: The bot can only show chats where it is a member.\n"
-            message_text += "If you don't see your chat, make sure the bot is added as an admin."
-            
-            await query.edit_message_text(message_text, reply_markup=reply_markup)
-            
-        except Exception as e:
-            logger.error(f"Error refreshing chats: {e}")
-            await query.edit_message_text("❌ Error refreshing chats. Please try again.")
+    elif data == "list_channels":
+        await query.edit_message_text("🔄 Fetching your channels...")
+        
+        # In a real implementation, you would fetch user's channels from Telegram
+        # This is a placeholder implementation
+        keyboard = [
+            [InlineKeyboardButton("➕ Add Bot to a Channel", url="https://t.me/YourBotUsername?startchannel=true")],
+            [InlineKeyboardButton("🔄 Refresh", callback_data="list_channels")],
+            [InlineKeyboardButton("↩️ Back", callback_data="back_to_main")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        message_text = "📢 Your Channels:\n\n"
+        message_text += "To get a channel's ID, make sure:\n"
+        message_text += "1. You are an admin in the channel\n"
+        message_text += "2. The bot is added to the channel\n"
+        message_text += "3. The bot has admin rights in the channel\n\n"
+        message_text += "Then use /getchatid command in that channel."
+        
+        await query.edit_message_text(message_text, reply_markup=reply_markup)
+        return
+    
+    elif data == "back_to_main":
+        keyboard = [
+            [InlineKeyboardButton("👥 My Groups", callback_data="list_groups")],
+            [InlineKeyboardButton("📢 My Channels", callback_data="list_channels")],
+            [InlineKeyboardButton("💬 Current Chat", callback_data="current_chat")],
+            [InlineKeyboardButton("❌ Cancel", callback_data="cancel_chat_selection")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        message_text = "🔍 Select where you want to get Chat ID from:\n\n"
+        message_text += "• 👥 My Groups - List all your groups\n"
+        message_text += "• 📢 My Channels - List all your channels\n"
+        message_text += "• 💬 Current Chat - Get ID of this chat"
+        
+        await query.edit_message_text(message_text, reply_markup=reply_markup)
+        return
     
     elif data == "cancel_chat_selection":
         await query.edit_message_text("❌ Chat selection cancelled.")
         if user_id in chat_selection_data:
             del chat_selection_data[user_id]
-    
-    elif data.startswith("select_chat_"):
-        chat_id = data.replace("select_chat_", "")
-        
-        try:
-            # Try to get chat info
-            chat = await context.bot.get_chat(chat_id)
-            
-            # Check if bot is admin in the chat (if it's a channel/supergroup)
-            if chat.type in [Chat.CHANNEL, Chat.SUPERGROUP]:
-                try:
-                    bot_member = await chat.get_member(context.bot.id)
-                    if not bot_member.status in ['administrator', 'creator']:
-                        await query.edit_message_text(
-                            f"❌ The bot is not an admin in {chat.title}.\n"
-                            f"Please make the bot an admin first, then try again."
-                        )
-                        return
-                except Exception as e:
-                    logger.error(f"Error checking admin status: {e}")
-                    await query.edit_message_text(
-                        f"❌ Could not verify bot admin status in {chat.title}.\n"
-                        f"Please make sure the bot is added as an admin."
-                    )
-                    return
-            
-            # Send the chat ID
-            chat_type = "Channel" if chat.type == Chat.CHANNEL else "Group" if chat.type in [Chat.GROUP, Chat.SUPERGROUP] else "Chat"
-            await query.edit_message_text(
-                f"✅ {chat_type} Selected: {chat.title if hasattr(chat, 'title') else 'Private Chat'}\n"
-                f"🆔 Chat ID: `{chat.id}`\n\n"
-                f"📋 Type: {chat.type}\n"
-                f"👤 Username: @{chat.username if chat.username else 'N/A'}\n\n"
-                f"💡 Tip: Use this ID in your post targeting.",
-                parse_mode=ParseMode.MARKDOWN
-            )
-            
-            # Clean up
-            if user_id in chat_selection_data:
-                del chat_selection_data[user_id]
-                
-        except BadRequest as e:
-            if "chat not found" in str(e).lower():
-                await query.edit_message_text(
-                    f"❌ Chat not found or the bot is not a member of this chat.\n"
-                    f"Please add the bot to the chat as an admin and try again."
-                )
-            else:
-                await query.edit_message_text(f"❌ Error: {str(e)}")
-        except Exception as e:
-            logger.error(f"Error getting chat info: {e}")
-            await query.edit_message_text(f"❌ Unexpected error: {str(e)}")
+        return
 
 async def start_post_creation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -281,7 +253,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     # Handle chat selection callbacks first
-    if data in ["refresh_chats", "cancel_chat_selection"] or data.startswith("select_chat_"):
+    if data in ["list_groups", "list_channels", "current_chat", "back_to_main", "cancel_chat_selection"]:
         await handle_chat_selection(update, context)
         return
     
@@ -631,7 +603,7 @@ async def handle_inline_callback(update: Update, context: ContextTypes.DEFAULT_T
         return
     
     # Handle chat selection callbacks
-    if data in ["refresh_chats", "cancel_chat_selection"] or data.startswith("select_chat_"):
+    if data in ["list_groups", "list_channels", "current_chat", "back_to_main", "cancel_chat_selection"]:
         await handle_chat_selection(update, context)
         return
     
