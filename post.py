@@ -24,6 +24,12 @@ db = client['telegram_bot']
 users_collection = db['users']
 posts_collection = db['posts']
 
+# MongoDB index fix - ensure unique index on user_id
+try:
+    users_collection.create_index("user_id", unique=True)
+except Exception as e:
+    print(f"MongoDB index creation error: {e}")
+
 # Configure logging to only show errors
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', 
@@ -85,8 +91,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(help_text)
 
 async def format_guide(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    format_text = "🎨 Text Formatting: *Bold*, _Italic*, `Code`, [Links](URL)"
-    await update.message.reply_text(format_text)
+    format_text = "🎨 Text Formatting: *Bold*, _Italic_, `Code`, [Links](URL)"
+    await update.message.reply_text(format_text, parse_mode=ParseMode.MARKDOWN)
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -169,10 +175,11 @@ async def handle_chat_selection(update: Update, context: ContextTypes.DEFAULT_TY
     elif data == "list_groups":
         await query.edit_message_text("🔄 Fetching your groups...")
         
-        # In a real implementation, you would fetch user's groups from Telegram
-        # This is a placeholder implementation
+        # Get bot username dynamically
+        bot_username = (await context.bot.get_me()).username
+        
         keyboard = [
-            [InlineKeyboardButton("➕ Add Bot to a Group", url="https://t.me/YourBotUsername?startgroup=true")],
+            [InlineKeyboardButton("➕ Add Bot to a Group", url=f"https://t.me/{bot_username}?startgroup=true")],
             [InlineKeyboardButton("🔄 Refresh", callback_data="list_groups")],
             [InlineKeyboardButton("↩️ Back", callback_data="back_to_main")]
         ]
@@ -191,10 +198,11 @@ async def handle_chat_selection(update: Update, context: ContextTypes.DEFAULT_TY
     elif data == "list_channels":
         await query.edit_message_text("🔄 Fetching your channels...")
         
-        # In a real implementation, you would fetch user's channels from Telegram
-        # This is a placeholder implementation
+        # Get bot username dynamically
+        bot_username = (await context.bot.get_me()).username
+        
         keyboard = [
-            [InlineKeyboardButton("➕ Add Bot to a Channel", url="https://t.me/YourBotUsername?startchannel=true")],
+            [InlineKeyboardButton("➕ Add Bot to a Channel", url=f"https://t.me/{bot_username}?startchannel=true")],
             [InlineKeyboardButton("🔄 Refresh", callback_data="list_channels")],
             [InlineKeyboardButton("↩️ Back", callback_data="back_to_main")]
         ]
