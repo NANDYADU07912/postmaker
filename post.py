@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from datetime import datetime
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, Chat
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from telegram.constants import ParseMode
 from telegram.error import TelegramError, Forbidden, BadRequest
@@ -56,6 +56,14 @@ class ChatSelectionData:
         self.current_page = 0
         self.selected_chat = None
 
+# Function to escape special characters for MarkdownV2
+def escape_markdown_v2(text):
+    if not text:
+        return ""
+    
+    escape_chars = r'_*[]()~`>#+-=|{}.!'
+    return re.sub(f'([{re.escape(escape_chars)}])', r'\\\1', text)
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     username = update.effective_user.username or "Unknown"
@@ -95,8 +103,15 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(help_text)
 
 async def format_guide(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    format_text = "🎨 Text Formatting: *Bold*, _Italic*, `Code`, [Links](URL)"
-    await update.message.reply_text(format_text, parse_mode=ParseMode.MARKDOWN)
+    format_text = (
+        "🎨 Text Formatting Guide:\n\n"
+        "*Bold* - Use asterisks\n"
+        "_Italic_ - Use underscores\n"
+        "`Code` - Use backticks\n"
+        "[Links](https://example.com) - [Text](URL)\n\n"
+        "⚠️ Note: When sending posts, special characters will be automatically escaped for proper formatting."
+    )
+    await update.message.reply_text(format_text, parse_mode=ParseMode.MARKDOWN, disable_web_page_preview=True)
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -250,18 +265,21 @@ async def send_post(update: Update, context: ContextTypes.DEFAULT_TYPE, target_c
         if post_data.inline_buttons:
             reply_markup = InlineKeyboardMarkup(post_data.inline_buttons)
         
+        # Escape caption for MarkdownV2
+        escaped_caption = escape_markdown_v2(post_data.caption)
+        
         if post_data.image:
             message = await context.bot.send_photo(
                 chat_id=target_chat_id,
                 photo=post_data.image,
-                caption=post_data.caption,
+                caption=escaped_caption,
                 reply_markup=reply_markup,
                 parse_mode=ParseMode.MARKDOWN_V2
             )
         else:
             message = await context.bot.send_message(
                 chat_id=target_chat_id,
-                text=post_data.caption,
+                text=escaped_caption,
                 reply_markup=reply_markup,
                 parse_mode=ParseMode.MARKDOWN_V2
             )
@@ -290,6 +308,8 @@ async def send_post(update: Update, context: ContextTypes.DEFAULT_TYPE, target_c
             await update.message.reply_text("❌ Chat not found! Please check the ID/username.")
         elif "not enough rights" in error_msg:
             await update.message.reply_text("❌ Bot doesn't have permission to post in this chat!")
+        elif "can't parse entities" in error_msg:
+            await update.message.reply_text("❌ Formatting Error! Please check your text for special characters.")
         else:
             await update.message.reply_text(f"❌ Error: {str(e)}")
     except Exception as e:
@@ -340,38 +360,46 @@ async def handle_broadcast_message(update: Update, context: ContextTypes.DEFAULT
                     except:
                         pass
                 
+                # Escape text for MarkdownV2 if it's a text message
+                if update.message.text:
+                    escaped_text = escape_markdown_v2(update.message.text)
+                
                 if update.message.photo:
+                    caption = escape_markdown_v2(update.message.caption) if update.message.caption else None
                     await context.bot.send_photo(
                         chat_id=user_chat_id,
                         photo=update.message.photo[-1].file_id,
-                        caption=update.message.caption,
-                        parse_mode=ParseMode.MARKDOWN_V2
+                        caption=caption,
+                        parse_mode=ParseMode.MARKDOWN_V2 if caption else None
                     )
                 elif update.message.video:
+                    caption = escape_markdown_v2(update.message.caption) if update.message.caption else None
                     await context.bot.send_video(
                         chat_id=user_chat_id,
                         video=update.message.video.file_id,
-                        caption=update.message.caption,
-                        parse_mode=ParseMode.MARKDOWN_V2
+                        caption=caption,
+                        parse_mode=ParseMode.MARKDOWN_V2 if caption else None
                     )
                 elif update.message.document:
+                    caption = escape_markdown_v2(update.message.caption) if update.message.caption else None
                     await context.bot.send_document(
                         chat_id=user_chat_id,
                         document=update.message.document.file_id,
-                        caption=update.message.caption,
-                        parse_mode=ParseMode.MARKDOWN_V2
+                        caption=caption,
+                        parse_mode=ParseMode.MARKDOWN_V2 if caption else None
                     )
                 elif update.message.animation:
+                    caption = escape_markdown_v2(update.message.caption) if update.message.caption else None
                     await context.bot.send_animation(
                         chat_id=user_chat_id,
                         animation=update.message.animation.file_id,
-                        caption=update.message.caption,
-                        parse_mode=ParseMode.MARKDOWN_V2
+                        caption=caption,
+                        parse_mode=ParseMode.MARKDOWN_V2 if caption else None
                     )
                 else:
                     await context.bot.send_message(
                         chat_id=user_chat_id,
-                        text=update.message.text,
+                        text=escaped_text,
                         parse_mode=ParseMode.MARKDOWN_V2
                     )
                 
